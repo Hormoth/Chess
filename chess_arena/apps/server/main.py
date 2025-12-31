@@ -60,10 +60,10 @@ def root():
 
 if __name__ == "__main__":
     # Prefer CLI for reload:
-    # python -m uvicorn chess_arena.apps.server.main:app --reload --host 127.0.0.1 --port 8001
+    # python -m uvicorn chess_arena.apps.server.main:app --reload --host 127.0.0.1 --port 8000
     uvicorn.run(
         "chess_arena.apps.server.main:app",
         host="127.0.0.1",
-        port=8001,
+        port=8000,
         reload=False,
     )

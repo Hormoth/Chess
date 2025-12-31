@@ -10,7 +10,7 @@ from chess_arena.apps.desktop_gui.ui.theme import APP_QSS
 
 def main():
     # Env var wins; fallback to local dev server
-    base_url = os.environ.get("CHESS_ARENA_URL") or "http://127.0.0.1:8001"
+    base_url = os.environ.get("CHESS_ARENA_URL") or "http://127.0.0.1:8000"
 
     # Create Qt app first, then apply theme
     app = QApplication(sys.argv)
