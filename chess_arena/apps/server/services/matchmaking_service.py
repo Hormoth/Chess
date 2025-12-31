@@ -14,16 +14,21 @@ class MatchmakingService:
 
     def enqueue(self, db, player_id: int, ranked: bool, vs_system: bool) -> dict:
         """
-        Returns JSON-safe dict only.
-        matched: {"status":"active","game_id":...,"ranked":...,"vs_system":...}
-        waiting: {"status":"waiting","ranked":...,"vs_system":...}
+        Enqueue a player for matchmaking.
+        
+        Returns consistent JSON structure:
+        {
+            "status": "active" | "waiting",
+            "game_id": int | None,
+            "ranked": bool,
+            "vs_system": bool
+        }
         """
-
-        # ---- vs_system: immediate game creation (player vs Stockfish bot account) ----
+        # ---- vs_system: immediate game creation ----
         if vs_system:
             bot = db.query(Player).filter(Player.is_bot == True).first()
             if not bot:
-                # auto-create a system bot
+                # Auto-create system bot
                 from passlib.context import CryptContext
                 pwd = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -51,18 +56,29 @@ class MatchmakingService:
             db.commit()
             db.refresh(g)
 
-            return {"game_id": g.id, "status": g.status, "ranked": ranked, "vs_system": True}
+            return {
+                "status": "active",
+                "game_id": g.id,
+                "ranked": ranked,
+                "vs_system": True
+            }
 
-        # ---- PvP queue (in-memory) ----
+        # ---- PvP queue ----
         q = self.ranked_q if ranked else self.free_q
 
         with self._lock:
-            # Prevent same player being queued twice
+            # Prevent duplicate queueing
             if player_id in q:
-                return {"status": "waiting", "ranked": ranked, "vs_system": False}
+                return {
+                    "status": "waiting",
+                    "game_id": None,
+                    "ranked": ranked,
+                    "vs_system": False
+                }
 
             q.append(player_id)
 
+            # Match if 2+ players
             if len(q) >= 2:
                 p1 = q.popleft()
                 p2 = q.popleft()
@@ -80,25 +96,43 @@ class MatchmakingService:
                 db.commit()
                 db.refresh(g)
 
-                return {"game_id": g.id, "status": g.status, "ranked": ranked, "vs_system": False}
+                return {
+                    "status": "active",
+                    "game_id": g.id,
+                    "ranked": ranked,
+                    "vs_system": False
+                }
 
-        # Not enough players yet
-        return {"status": "waiting", "ranked": ranked, "vs_system": False}
+        # Still waiting
+        return {
+            "status": "waiting",
+            "game_id": None,
+            "ranked": ranked,
+            "vs_system": False
+        }
 
     def status(self, db, player_id: int, ranked: bool) -> dict:
         """
+        Check matchmaking status for a player.
+        
         Returns:
-          - {"status":"waiting","ranked":ranked} if still queued
-          - {"status":"active","game_id":...,"ranked":...} if matched
-          - {"status":"idle","ranked":ranked} if not queued and no active game found
+        {
+            "status": "waiting" | "active" | "idle",
+            "game_id": int | None,
+            "ranked": bool
+        }
         """
         q = self.ranked_q if ranked else self.free_q
 
         with self._lock:
             if player_id in q:
-                return {"status": "waiting", "ranked": ranked}
+                return {
+                    "status": "waiting",
+                    "game_id": None,
+                    "ranked": ranked
+                }
 
-        # Not queued anymore → see if an active game exists for this player
+        # Check for active game
         g = (
             db.query(Game)
             .filter(
@@ -108,10 +142,19 @@ class MatchmakingService:
             .order_by(Game.id.desc())
             .first()
         )
-        if not g:
-            return {"status": "idle", "ranked": ranked}
+        
+        if g:
+            return {
+                "status": "active",
+                "game_id": g.id,
+                "ranked": g.ranked
+            }
 
-        return {"status": "active", "game_id": g.id, "ranked": g.ranked}
+        return {
+            "status": "idle",
+            "game_id": None,
+            "ranked": ranked
+        }
 
 
 mm = MatchmakingService()

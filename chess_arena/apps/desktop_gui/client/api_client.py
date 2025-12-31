@@ -17,11 +17,13 @@ class APIClient:
     # ----------------- helpers -----------------
 
     def _auth_headers(self) -> dict:
+        """Return Authorization header with Bearer token."""
         if self.token:
             return {"Authorization": f"Bearer {self.token}"}
         return {}
 
     def _raise(self, r: httpx.Response):
+        """Raise HTTPStatusError with response body."""
         try:
             r.raise_for_status()
         except httpx.HTTPStatusError as e:
@@ -32,6 +34,7 @@ class APIClient:
             )
 
     def logout(self):
+        """Clear authentication state."""
         self.token = None
         self.player_id = None
         self.name = None
@@ -39,6 +42,7 @@ class APIClient:
     # ----------------- auth -----------------
 
     def register(self, email: str, name: str, password: str, is_bot: bool = False):
+        """Register a new account."""
         r = httpx.post(
             f"{self.base_url}/auth/register",
             json={
@@ -58,6 +62,7 @@ class APIClient:
         return data
 
     def login(self, email: str, password: str):
+        """Login with email and password."""
         r = httpx.post(
             f"{self.base_url}/auth/login",
             json={"email": email, "password": password},
@@ -74,6 +79,7 @@ class APIClient:
     # ----------------- player -----------------
 
     def me(self):
+        """Get current player info."""
         r = httpx.get(
             f"{self.base_url}/players/me",
             headers=self._auth_headers(),
@@ -82,17 +88,25 @@ class APIClient:
         self._raise(r)
 
         data = r.json()
-
-        # Keep local cache in sync for UI usage
+        # Keep local cache in sync
         self.player_id = data.get("id", self.player_id)
         self.name = data.get("name", self.name)
-
         return data
-
 
     # ----------------- matchmaking / games -----------------
 
     def queue(self, ranked: bool, vs_system: bool):
+        """
+        Queue for matchmaking using token authentication.
+        
+        Returns:
+        {
+            "status": "active" | "waiting",
+            "game_id": int | None,
+            "ranked": bool,
+            "vs_system": bool
+        }
+        """
         r = httpx.post(
             f"{self.base_url}/matchmaking/queue",
             json={"ranked": ranked, "vs_system": vs_system},
@@ -103,6 +117,7 @@ class APIClient:
         return r.json()
 
     def get_game(self, game_id: int):
+        """Get game state."""
         r = httpx.get(
             f"{self.base_url}/games/{game_id}",
             headers=self._auth_headers(),
@@ -112,6 +127,7 @@ class APIClient:
         return r.json()
 
     def move(self, game_id: int, uci: str):
+        """Make a move using token authentication."""
         r = httpx.post(
             f"{self.base_url}/games/{game_id}/move",
             json={"uci": uci},
@@ -122,6 +138,7 @@ class APIClient:
         return r.json()
 
     def chat(self, game_id: int, text: str):
+        """Send chat message using token authentication."""
         r = httpx.post(
             f"{self.base_url}/games/{game_id}/chat",
             json={"text": text},
