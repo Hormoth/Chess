@@ -12,6 +12,49 @@ class MatchmakingService:
         self.ranked_q = deque()
         self.free_q = deque()
 
+    def get_waiting_players(self, db, ranked: bool = None) -> list[dict]:
+        """Get list of players waiting in queue."""
+        players = []
+        
+        with self._lock:
+            if ranked is None or ranked is True:
+                for pid in self.ranked_q:
+                    p = db.query(Player).filter(Player.id == pid).first()
+                    if p:
+                        players.append({
+                            "player_id": p.id,
+                            "name": p.name,
+                            "rating": p.rating,
+                            "ranked": True,
+                            "is_bot": p.is_bot
+                        })
+            
+            if ranked is None or ranked is False:
+                for pid in self.free_q:
+                    p = db.query(Player).filter(Player.id == pid).first()
+                    if p:
+                        players.append({
+                            "player_id": p.id,
+                            "name": p.name,
+                            "rating": p.rating,
+                            "ranked": False,
+                            "is_bot": p.is_bot
+                        })
+        
+        return players
+
+    def cancel(self, player_id: int) -> bool:
+        """Remove a player from all queues."""
+        with self._lock:
+            was_queued = False
+            if player_id in self.ranked_q:
+                self.ranked_q.remove(player_id)
+                was_queued = True
+            if player_id in self.free_q:
+                self.free_q.remove(player_id)
+                was_queued = True
+            return was_queued
+
     def enqueue(self, db, player_id: int, ranked: bool, vs_system: bool) -> dict:
         """
         Enqueue a player for matchmaking.

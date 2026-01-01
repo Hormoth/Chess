@@ -30,6 +30,8 @@ from .api.auth import router as auth_router
 from .api.players import router as players_router
 from .api.matchmaking import router as mm_router
 from .api.games import router as games_router
+from .api.lobby import router as lobby_router
+
 
 # Ensure storage dir exists for sqlite file
 _Path("storage").mkdir(parents=True, exist_ok=True)
@@ -63,7 +65,7 @@ app.include_router(auth_router)
 app.include_router(players_router)
 app.include_router(mm_router)
 app.include_router(games_router)
-
+app.include_router(lobby_router)
 
 @app.get("/")
 def root():

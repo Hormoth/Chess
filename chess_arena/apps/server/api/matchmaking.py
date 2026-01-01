@@ -12,7 +12,6 @@ router = APIRouter(prefix="/matchmaking", tags=["matchmaking"])
 class QueueReq(BaseModel):
     ranked: bool = True
     vs_system: bool = False
-    # ❌ REMOVED: player_id (use token instead)
 
 
 @router.post("/queue")
@@ -38,3 +37,23 @@ def status(
     """Get matchmaking status using token authentication."""
     p = get_player_from_auth(db, authorization)
     return mm.status(db, p.id, ranked=ranked)
+
+
+@router.get("/waiting")
+def get_waiting_players(
+    ranked: bool | None = None,
+    db: Session = Depends(get_db),
+):
+    """Get list of players waiting in queue."""
+    return mm.get_waiting_players(db, ranked=ranked)
+
+
+@router.post("/cancel")
+def cancel_queue(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
+    """Cancel matchmaking and leave the queue."""
+    p = get_player_from_auth(db, authorization)
+    was_queued = mm.cancel(p.id)
+    return {"success": True, "was_queued": was_queued}
