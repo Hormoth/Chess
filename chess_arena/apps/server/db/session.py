@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from ...server.settings import settings
+from ..settings import settings
 
 # sqlite needs check_same_thread=False
 connect_args = {"check_same_thread": False} if settings.db_url.startswith("sqlite") else {}

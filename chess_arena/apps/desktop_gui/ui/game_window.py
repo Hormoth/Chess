@@ -381,8 +381,18 @@ class GameWindow(QWidget):
             return
         
         self._clear_selection_ui()
-        
+
+        # Check if this is a pawn promotion
         uci = f"{frm}{to}"
+        piece = board.piece_at(chess.parse_square(frm))
+        if piece and piece.piece_type == chess.PAWN:
+            to_rank = to[1]
+            # White pawn promoting to rank 8, or black pawn promoting to rank 1
+            if (piece.color == chess.WHITE and to_rank == '8') or \
+               (piece.color == chess.BLACK and to_rank == '1'):
+                # Default to queen promotion (TODO: add promotion chooser dialog)
+                uci = f"{frm}{to}q"
+
         try:
             self.api.move(self.game_id, uci)
             self.board.set_last_move(frm, to)

@@ -301,12 +301,13 @@ class Lobby(QWidget):
         self.btn_pvp.setEnabled(True)
         self.btn_sys.setEnabled(True)
         self.btn_cancel.hide()
-        
-        # Call cancel endpoint if available
+
+        # Call cancel endpoint with token auth
         try:
             import httpx
-            httpx.post(f"{self.api.base_url}/matchmaking/cancel", 
-                      json={"player_id": self.api.player_id}, timeout=5)
+            headers = {"Authorization": f"Bearer {self.api.token}"} if self.api.token else {}
+            httpx.post(f"{self.api.base_url}/matchmaking/cancel",
+                      headers=headers, timeout=5)
         except:
             pass
     
@@ -342,12 +343,13 @@ class Lobby(QWidget):
     def send_lobby_chat(self, text: str):
         """Send message to lobby chat."""
         try:
-            # Call lobby chat endpoint if available
             import httpx
+            headers = {"Authorization": f"Bearer {self.api.token}"} if self.api.token else {}
             httpx.post(f"{self.api.base_url}/lobby/chat",
-                      json={"player_id": self.api.player_id, "text": text}, timeout=5)
+                      json={"text": text},
+                      headers=headers,
+                      timeout=5)
             # Add locally for now
-            me = self.api.me()
-            self.chat.append_player(me.get("name", "You"), text)
+            self.chat.append_player(self.api.name or "You", text)
         except Exception as e:
             self.chat.append_system(f"Chat error: {e}")

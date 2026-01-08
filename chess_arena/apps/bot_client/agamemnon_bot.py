@@ -1,4 +1,5 @@
 import os
+import random
 import time
 import chess
 from .api_client import APIClient
@@ -18,7 +19,7 @@ def pick_random_legal_move(fen: str) -> str:
     moves = list(b.legal_moves)
     if not moves:
         return ""
-    return moves[0].uci()
+    return random.choice(moves).uci()
 
 
 def main():

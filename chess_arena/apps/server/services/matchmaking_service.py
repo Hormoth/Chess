@@ -55,77 +55,50 @@ class MatchmakingService:
                 was_queued = True
             return was_queued
 
-    def enqueue(self, db, player_id: int, ranked: bool, vs_system: bool) -> dict:
-        """
-        Enqueue a player for matchmaking.
-        
-        Returns consistent JSON structure:
-        {
-            "status": "active" | "waiting",
-            "game_id": int | None,
-            "ranked": bool,
-            "vs_system": bool
-        }
-        """
-        # ---- vs_system: immediate game creation ----
-        if vs_system:
-            bot = db.query(Player).filter(Player.is_bot == True).first()
-            if not bot:
-                # Auto-create system bot
-                from passlib.context import CryptContext
-                pwd = CryptContext(schemes=["argon2"], deprecated="auto")
+    def _get_or_create_stockfish_bot(self, db) -> Player:
+        """Get or create the Stockfish system bot."""
+        bot = db.query(Player).filter(
+            Player.is_bot == True,
+            Player.email == "system@local"
+        ).first()
 
-                bot = Player(
-                    email="system@local",
-                    name="Stockfish",
-                    password_hash=pwd.hash("system-bot-password"),
-                    is_bot=True,
-                )
-                bot.ensure_api_key()
-                db.add(bot)
-                db.commit()
-                db.refresh(bot)
+        if not bot:
+            from passlib.context import CryptContext
+            pwd = CryptContext(schemes=["argon2"], deprecated="auto")
 
-            white, black = (player_id, bot.id) if random.random() < 0.5 else (bot.id, player_id)
-            g = Game(
-                ranked=ranked,
-                time_control=settings.default_time_control,
-                white_id=white,
-                black_id=black,
-                fen="startpos",
-                status="active",
+            bot = Player(
+                email="system@local",
+                name="Stockfish",
+                password_hash=pwd.hash("system-bot-password"),
+                is_bot=True,
             )
-            db.add(g)
+            bot.ensure_api_key()
+            db.add(bot)
             db.commit()
-            db.refresh(g)
+            db.refresh(bot)
 
-            return {
-                "status": "active",
-                "game_id": g.id,
-                "ranked": ranked,
-                "vs_system": True
-            }
+        return bot
 
-        # ---- PvP queue ----
+    def _try_match_with_waiting_player(self, db, player_id: int, ranked: bool) -> Game | None:
+        """
+        Try to match with a waiting player (human or bot).
+        Returns a Game if matched, None otherwise.
+        Must be called while holding self._lock.
+        """
         q = self.ranked_q if ranked else self.free_q
 
-        with self._lock:
-            # Prevent duplicate queueing
-            if player_id in q:
-                return {
-                    "status": "waiting",
-                    "game_id": None,
-                    "ranked": ranked,
-                    "vs_system": False
-                }
+        # Look for any waiting player that isn't ourselves
+        for waiting_pid in list(q):
+            if waiting_pid != player_id:
+                # Found a match! Remove them from queue
+                q.remove(waiting_pid)
 
-            q.append(player_id)
+                # Also remove ourselves if we were queued
+                if player_id in q:
+                    q.remove(player_id)
 
-            # Match if 2+ players
-            if len(q) >= 2:
-                p1 = q.popleft()
-                p2 = q.popleft()
-                white, black = (p1, p2) if random.random() < 0.5 else (p2, p1)
+                # Randomly assign colors
+                white, black = (player_id, waiting_pid) if random.random() < 0.5 else (waiting_pid, player_id)
 
                 g = Game(
                     ranked=ranked,
@@ -139,20 +112,77 @@ class MatchmakingService:
                 db.commit()
                 db.refresh(g)
 
+                return g
+
+        return None
+
+    def enqueue(self, db, player_id: int, ranked: bool, vs_system: bool) -> dict:
+        """
+        Enqueue a player for matchmaking.
+
+        PRIORITY ORDER:
+        1. First, always try to match with another waiting player (human or bot)
+        2. Only if no players are waiting AND vs_system=True, create game vs Stockfish
+        3. Otherwise, add to queue and wait
+
+        Returns consistent JSON structure:
+        {
+            "status": "active" | "waiting",
+            "game_id": int | None,
+            "ranked": bool,
+            "vs_system": bool
+        }
+        """
+        with self._lock:
+            # ---- PRIORITY 1: Try to match with waiting player/bot ----
+            game = self._try_match_with_waiting_player(db, player_id, ranked)
+            if game:
                 return {
                     "status": "active",
-                    "game_id": g.id,
+                    "game_id": game.id,
                     "ranked": ranked,
                     "vs_system": False
                 }
 
-        # Still waiting
-        return {
-            "status": "waiting",
-            "game_id": None,
-            "ranked": ranked,
-            "vs_system": False
-        }
+            # ---- PRIORITY 2: If vs_system requested and no players waiting, play Stockfish ----
+            if vs_system:
+                bot = self._get_or_create_stockfish_bot(db)
+
+                # Make sure we're not matching stockfish with itself
+                if player_id != bot.id:
+                    white, black = (player_id, bot.id) if random.random() < 0.5 else (bot.id, player_id)
+                    g = Game(
+                        ranked=ranked,
+                        time_control=settings.default_time_control,
+                        white_id=white,
+                        black_id=black,
+                        fen="startpos",
+                        status="active",
+                    )
+                    db.add(g)
+                    db.commit()
+                    db.refresh(g)
+
+                    return {
+                        "status": "active",
+                        "game_id": g.id,
+                        "ranked": ranked,
+                        "vs_system": True
+                    }
+
+            # ---- PRIORITY 3: Add to queue and wait for another player ----
+            q = self.ranked_q if ranked else self.free_q
+
+            # Prevent duplicate queueing
+            if player_id not in q:
+                q.append(player_id)
+
+            return {
+                "status": "waiting",
+                "game_id": None,
+                "ranked": ranked,
+                "vs_system": False
+            }
 
     def status(self, db, player_id: int, ranked: bool) -> dict:
         """
