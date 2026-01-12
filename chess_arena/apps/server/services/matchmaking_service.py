@@ -79,40 +79,61 @@ class MatchmakingService:
 
         return bot
 
-    def _try_match_with_waiting_player(self, db, player_id: int, ranked: bool) -> Game | None:
+    def _try_match_with_waiting_player(self, db, player_id: int, ranked: bool, requesting_is_bot: bool = False) -> Game | None:
         """
-        Try to match with a waiting player (human or bot).
+        Try to match with a waiting player.
+
+        PRIORITY:
+        1. If requesting player is human -> try to match with human first, then bot
+        2. If requesting player is bot -> try to match with human first, then bot
+
+        This ensures humans play humans when possible.
         Returns a Game if matched, None otherwise.
         Must be called while holding self._lock.
         """
         q = self.ranked_q if ranked else self.free_q
 
-        # Look for any waiting player that isn't ourselves
+        # Separate waiting players into humans and bots
+        waiting_humans = []
+        waiting_bots = []
+
         for waiting_pid in list(q):
-            if waiting_pid != player_id:
-                # Found a match! Remove them from queue
-                q.remove(waiting_pid)
+            if waiting_pid == player_id:
+                continue
+            p = db.query(Player).filter(Player.id == waiting_pid).first()
+            if p:
+                if p.is_bot:
+                    waiting_bots.append(waiting_pid)
+                else:
+                    waiting_humans.append(waiting_pid)
 
-                # Also remove ourselves if we were queued
-                if player_id in q:
-                    q.remove(player_id)
+        # Priority: humans first, then bots
+        match_order = waiting_humans + waiting_bots
 
-                # Randomly assign colors
-                white, black = (player_id, waiting_pid) if random.random() < 0.5 else (waiting_pid, player_id)
+        for waiting_pid in match_order:
+            # Found a match! Remove them from queue
+            q.remove(waiting_pid)
 
-                g = Game(
-                    ranked=ranked,
-                    time_control=settings.default_time_control,
-                    white_id=white,
-                    black_id=black,
-                    fen="startpos",
-                    status="active",
-                )
-                db.add(g)
-                db.commit()
-                db.refresh(g)
+            # Also remove ourselves if we were queued
+            if player_id in q:
+                q.remove(player_id)
 
-                return g
+            # Randomly assign colors
+            white, black = (player_id, waiting_pid) if random.random() < 0.5 else (waiting_pid, player_id)
+
+            g = Game(
+                ranked=ranked,
+                time_control=settings.default_time_control,
+                white_id=white,
+                black_id=black,
+                fen="startpos",
+                status="active",
+            )
+            db.add(g)
+            db.commit()
+            db.refresh(g)
+
+            return g
 
         return None
 
@@ -121,9 +142,10 @@ class MatchmakingService:
         Enqueue a player for matchmaking.
 
         PRIORITY ORDER:
-        1. First, always try to match with another waiting player (human or bot)
-        2. Only if no players are waiting AND vs_system=True, create game vs Stockfish
-        3. Otherwise, add to queue and wait
+        1. First, try to match with a human player
+        2. If no humans, try to match with a bot player
+        3. Only if no players are waiting AND vs_system=True, create game vs Stockfish
+        4. Otherwise, add to queue and wait
 
         Returns consistent JSON structure:
         {
@@ -133,9 +155,13 @@ class MatchmakingService:
             "vs_system": bool
         }
         """
+        # Check if requesting player is a bot
+        requesting_player = db.query(Player).filter(Player.id == player_id).first()
+        requesting_is_bot = requesting_player.is_bot if requesting_player else False
+
         with self._lock:
-            # ---- PRIORITY 1: Try to match with waiting player/bot ----
-            game = self._try_match_with_waiting_player(db, player_id, ranked)
+            # ---- PRIORITY 1: Try to match with waiting player (humans first) ----
+            game = self._try_match_with_waiting_player(db, player_id, ranked, requesting_is_bot)
             if game:
                 return {
                     "status": "active",

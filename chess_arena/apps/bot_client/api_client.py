@@ -85,3 +85,79 @@ class APIClient:
         )
         self._raise(r)
         return r.json()
+
+    # ------------- lobby -------------
+
+    def join_lobby(self):
+        """Join the lobby (mark as online)."""
+        r = httpx.post(
+            f"{self.base_url}/lobby/join",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def leave_lobby(self):
+        """Leave the lobby (mark as offline)."""
+        r = httpx.post(
+            f"{self.base_url}/lobby/leave",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def lobby_heartbeat(self):
+        """Send heartbeat to stay online."""
+        r = httpx.post(
+            f"{self.base_url}/lobby/heartbeat",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def get_online_players(self, include_bots: bool = True):
+        """Get list of online players."""
+        r = httpx.get(
+            f"{self.base_url}/lobby/online",
+            params={"include_bots": include_bots},
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def lobby_chat(self, text: str):
+        """Send a message to the lobby."""
+        r = httpx.post(
+            f"{self.base_url}/lobby/chat",
+            json={"text": text},
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def get_lobby_messages(self, since_id: int = 0, limit: int = 50):
+        """Get lobby messages since a given ID."""
+        r = httpx.get(
+            f"{self.base_url}/lobby/chat",
+            params={"since": since_id, "limit": limit},
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def get_recent_lobby_messages(self, limit: int = 20):
+        """Get recent lobby messages."""
+        r = httpx.get(
+            f"{self.base_url}/lobby/chat/recent",
+            params={"limit": limit},
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()

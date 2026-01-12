@@ -53,3 +53,54 @@ def get_lobby_messages(
 def get_recent_messages(limit: int = 20):
     """Get most recent lobby messages."""
     return lobby.get_recent(limit=limit)
+
+
+# ---- Online Presence Endpoints ----
+
+@router.post("/join")
+def join_lobby(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
+    """Join the lobby (mark player as online)."""
+    p = get_player_from_auth(db, authorization)
+    return lobby.join_lobby(
+        player_id=p.id,
+        player_name=p.name,
+        rating=p.rating,
+        is_bot=p.is_bot
+    )
+
+
+@router.post("/leave")
+def leave_lobby(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
+    """Leave the lobby (mark player as offline)."""
+    p = get_player_from_auth(db, authorization)
+    left = lobby.leave_lobby(p.id)
+    return {"left": left}
+
+
+@router.post("/heartbeat")
+def lobby_heartbeat(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
+    """Update last_seen timestamp (call periodically to stay online)."""
+    p = get_player_from_auth(db, authorization)
+    updated = lobby.heartbeat(p.id)
+    return {"updated": updated}
+
+
+@router.get("/online")
+def get_online_players(include_bots: bool = True):
+    """Get list of players currently online in the lobby."""
+    return lobby.get_online_players(include_bots=include_bots)
+
+
+@router.get("/online/count")
+def get_online_count():
+    """Get count of online players (humans and bots)."""
+    return lobby.get_online_count()
