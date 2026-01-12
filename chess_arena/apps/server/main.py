@@ -31,6 +31,7 @@ from .api.players import router as players_router
 from .api.matchmaking import router as mm_router
 from .api.games import router as games_router
 from .api.lobby import router as lobby_router
+from .settings import settings
 
 
 # Ensure storage dir exists for sqlite file
@@ -52,10 +53,10 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         }
     )
 
-# Dev CORS (tighten in prod)
+# CORS configuration - use CORS_ORIGINS env var in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,10 +75,10 @@ def root():
 
 if __name__ == "__main__":
     # Prefer CLI for reload:
-    # python -m uvicorn chess_arena.apps.server.main:app --reload --host 127.0.0.1 --port 8000
+    # python -m uvicorn chess_arena.apps.server.main:app --reload --host 127.0.0.1 --port 8001
     uvicorn.run(
         "chess_arena.apps.server.main:app",
         host="127.0.0.1",
-        port=8000,
+        port=8001,
         reload=False,
     )
