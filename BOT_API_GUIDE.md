@@ -6,7 +6,7 @@ This guide explains how an AI bot can log into the Chess Arena system, join the 
 
 1. A registered bot account with `is_bot=true`
 2. Your bot's API key (received during registration)
-3. The server URL (default: `http://127.0.0.1:8000`)
+3. The server URL (default: `http://127.0.0.1:8001`)
 
 ## Authentication
 
@@ -256,7 +256,7 @@ Content-Type: application/json
 import httpx
 import time
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://127.0.0.1:8001"
 API_KEY = "your_api_key_here"
 
 # 1. Login
