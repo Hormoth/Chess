@@ -7,10 +7,73 @@ import chess
 import websockets
 
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QMessageBox, 
-    QFrame, QPushButton, QSizePolicy
+    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QMessageBox,
+    QFrame, QPushButton, QSizePolicy, QDialog, QGridLayout
 )
 from PySide6.QtCore import Qt, Signal
+
+
+class PromotionDialog(QDialog):
+    """Dialog for selecting pawn promotion piece."""
+
+    def __init__(self, color: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Promote Pawn")
+        self.setModal(True)
+        self.selected_piece = "q"  # Default to queen
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        label = QLabel("Choose promotion piece:")
+        label.setStyleSheet("font-size: 14px; font-weight: 600;")
+        layout.addWidget(label)
+
+        # Button grid for pieces
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        pieces = [
+            ("Queen", "q", 0, 0),
+            ("Rook", "r", 0, 1),
+            ("Bishop", "b", 1, 0),
+            ("Knight", "n", 1, 1),
+        ]
+
+        # Unicode chess pieces
+        white_symbols = {"q": "\u2655", "r": "\u2656", "b": "\u2657", "n": "\u2658"}
+        black_symbols = {"q": "\u265B", "r": "\u265C", "b": "\u265D", "n": "\u265E"}
+        symbols = white_symbols if color == "white" else black_symbols
+
+        for name, code, row, col in pieces:
+            btn = QPushButton(f"{symbols[code]}\n{name}")
+            btn.setFixedSize(80, 80)
+            btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 28px;
+                    border: 2px solid #3a4f6a;
+                    border-radius: 8px;
+                    background: #1f2a3a;
+                }
+                QPushButton:hover {
+                    background: #2d3d52;
+                    border-color: #5c7a9e;
+                }
+                QPushButton:pressed {
+                    background: #2d6a4f;
+                }
+            """)
+            btn.clicked.connect(lambda checked, c=code: self._select(c))
+            grid.addWidget(btn, row, col)
+
+        layout.addLayout(grid)
+
+    def _select(self, piece_code: str):
+        self.selected_piece = piece_code
+        self.accept()
+
+    def get_piece(self) -> str:
+        return self.selected_piece
 
 from .widgets.chess_board_widget import ChessBoardWidget
 from .widgets.chat_widget import ChatWidget
@@ -390,8 +453,13 @@ class GameWindow(QWidget):
             # White pawn promoting to rank 8, or black pawn promoting to rank 1
             if (piece.color == chess.WHITE and to_rank == '8') or \
                (piece.color == chess.BLACK and to_rank == '1'):
-                # Default to queen promotion (TODO: add promotion chooser dialog)
-                uci = f"{frm}{to}q"
+                # Show promotion chooser dialog
+                color = "white" if piece.color == chess.WHITE else "black"
+                dialog = PromotionDialog(color, self)
+                if dialog.exec() == QDialog.Accepted:
+                    uci = f"{frm}{to}{dialog.get_piece()}"
+                else:
+                    return  # User cancelled
 
         try:
             self.api.move(self.game_id, uci)
@@ -407,19 +475,28 @@ class GameWindow(QWidget):
     
     def _on_resign(self):
         reply = QMessageBox.question(
-            self, "Resign", 
+            self, "Resign",
             "Are you sure you want to resign?",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
             try:
-                # Call resign endpoint if available
+                self.api.resign(self.game_id)
                 self.chat.append_system("You resigned.")
+                self.refresh()
             except Exception as e:
-                self.chat.append_system(f"Error: {e}")
-    
+                self.chat.append_system(f"Resign error: {e}")
+
     def _on_offer_draw(self):
-        self.chat.append_system("Draw offer sent (not implemented yet)")
+        try:
+            result = self.api.offer_draw(self.game_id)
+            if result.get("status") == "accepted":
+                self.chat.append_system("Draw agreed!")
+                self.refresh()
+            else:
+                self.chat.append_system("Draw offer sent.")
+        except Exception as e:
+            self.chat.append_system(f"Draw offer error: {e}")
     
     def closeEvent(self, event):
         self._stop = True
@@ -453,11 +530,32 @@ class GameWindow(QWidget):
                             pid = data.get("player_id")
                             txt = data.get("text")
                             self.wsChat.emit(f"{pid}: {txt}")
-                        
+
                         elif data.get("type") == "move":
                             self.current_fen = data.get("fen", self.current_fen)
                             self.current_pgn = data.get("pgn", self.current_pgn)
+                            # Check if move resulted in checkmate/stalemate
+                            meta = data.get("meta", {})
+                            if meta.get("is_checkmate"):
+                                self.wsChat.emit("[CHECKMATE!]")
+                            elif meta.get("is_stalemate"):
+                                self.wsChat.emit("[STALEMATE - Draw]")
+                            elif meta.get("insufficient"):
+                                self.wsChat.emit("[DRAW - Insufficient material]")
                             self.wsMove.emit()
+
+                        elif data.get("type") == "game_end":
+                            result = data.get("result", "")
+                            reason = data.get("end_reason", "")
+                            self.wsChat.emit(f"[GAME OVER] {result} - {reason}")
+                            self.wsMove.emit()  # Refresh UI
+
+                        elif data.get("type") == "draw_offer":
+                            from_player = data.get("from_player")
+                            self.wsChat.emit(f"[Draw offered by player {from_player}]")
+
+                        elif data.get("type") == "draw_declined":
+                            self.wsChat.emit("[Draw offer declined]")
                     
                     ping_task.cancel()
             except Exception as e:

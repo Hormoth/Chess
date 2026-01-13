@@ -38,3 +38,45 @@ def me(db: Session = Depends(get_db), authorization: str | None = Header(default
         "losses": p.losses,
         "draws": p.draws,
     }
+
+
+@router.get("/leaderboard")
+def leaderboard(limit: int = 10, db: Session = Depends(get_db)):
+    """Get top players by rating."""
+    players = (
+        db.query(Player)
+        .filter(Player.is_bot == False)
+        .order_by(Player.rating.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "rank": i + 1,
+            "id": p.id,
+            "name": p.name,
+            "rating": p.rating,
+            "wins": p.wins,
+            "losses": p.losses,
+            "draws": p.draws,
+        }
+        for i, p in enumerate(players)
+    ]
+
+
+@router.get("/{player_id}")
+def get_player(player_id: int, db: Session = Depends(get_db)):
+    """Get public info about a player by ID."""
+    p = db.get(Player, player_id)
+    if not p:
+        raise HTTPException(404, "Player not found")
+    return {
+        "id": p.id,
+        "name": p.name,
+        "is_bot": p.is_bot,
+        "rating": p.rating,
+        "rd": p.rd,
+        "wins": p.wins,
+        "losses": p.losses,
+        "draws": p.draws,
+    }
