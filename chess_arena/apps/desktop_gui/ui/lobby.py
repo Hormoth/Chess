@@ -157,7 +157,8 @@ class Lobby(QWidget):
         
         self._polling = False
         self._poll_timer = None
-        
+        self._last_chat_id = 0  # Track last seen chat message ID
+
         self._setup_ui()
     
     def _setup_ui(self):
@@ -249,16 +250,54 @@ class Lobby(QWidget):
         
         # Initial data load
         self._refresh_lobby_data()
-        
-        # Periodic refresh timer
+
+        # Periodic refresh timer for leaderboard/waiting (slower)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._refresh_lobby_data)
         self._refresh_timer.start(10000)  # Refresh every 10 seconds
+
+        # Faster chat refresh timer
+        self._chat_timer = QTimer(self)
+        self._chat_timer.timeout.connect(self._refresh_chat)
+        self._chat_timer.start(2000)  # Refresh chat every 2 seconds
     
     def _refresh_lobby_data(self):
-        """Refresh waiting players and leaderboard."""
+        """Refresh waiting players, leaderboard, and chat."""
         self.waiting_players.refresh(self.api)
         self.leaderboard.refresh(self.api)
+        self._refresh_chat()
+
+    def _refresh_chat(self):
+        """Fetch new chat messages from server."""
+        try:
+            import httpx
+            r = httpx.get(
+                f"{self.api.base_url}/lobby/chat",
+                params={"since": self._last_chat_id, "limit": 50},
+                timeout=5
+            )
+            if r.status_code == 200:
+                messages = r.json()
+                for msg in messages:
+                    msg_id = msg.get("id", 0)
+                    if msg_id > self._last_chat_id:
+                        self._last_chat_id = msg_id
+
+                        # Skip our own messages (already added locally)
+                        if msg.get("player_id") == getattr(self.api, "player_id", None):
+                            continue
+
+                        player_name = msg.get("player_name", "Unknown")
+                        text = msg.get("text", "")
+                        is_bot = msg.get("is_bot", False)
+
+                        # Format bot messages differently
+                        if is_bot:
+                            self.chat.append(f'<span style="color: #9b59b6; font-weight: 600;">🤖 {player_name}:</span> {text}')
+                        else:
+                            self.chat.append_player(player_name, text, is_opponent=True)
+        except Exception as e:
+            pass  # Silent fail for chat refresh
     
     def queue_pvp(self):
         """Queue for PvP matchmaking."""

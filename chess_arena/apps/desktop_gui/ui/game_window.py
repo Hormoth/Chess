@@ -153,10 +153,11 @@ class PlayerInfoWidget(QFrame):
 
 class GameWindow(QWidget):
     """Main game window with board, chat, and move history."""
-    
+
     # Thread-safe signals for websocket updates
     wsChat = Signal(str)
     wsMove = Signal()
+    gameEnded = Signal()  # Emitted when game is over
     
     def __init__(self, api, game_id: int, parent=None):
         super().__init__(parent)
@@ -464,8 +465,8 @@ class GameWindow(QWidget):
         try:
             self.api.move(self.game_id, uci)
             self.board.set_last_move(frm, to)
-        except Exception as e:
-            self.chat.append_system(f"Move rejected: {e}")
+        except Exception:
+            self.chat.append_system("Illegal move")
     
     def send_chat(self, text: str):
         try:
@@ -527,9 +528,13 @@ class GameWindow(QWidget):
                         data = json.loads(msg)
                         
                         if data.get("type") == "chat":
-                            pid = data.get("player_id")
-                            txt = data.get("text")
-                            self.wsChat.emit(f"{pid}: {txt}")
+                            player_name = data.get("player_name", f"Player {data.get('player_id')}")
+                            txt = data.get("text", "")
+                            is_bot = data.get("is_bot", False)
+                            if is_bot:
+                                self.wsChat.emit(f'<span style="color: #9b59b6; font-weight: 600;">🤖 {player_name}:</span> {txt}')
+                            else:
+                                self.wsChat.emit(f'<span style="color: #40916c; font-weight: 600;">{player_name}:</span> {txt}')
 
                         elif data.get("type") == "move":
                             self.current_fen = data.get("fen", self.current_fen)
@@ -549,6 +554,7 @@ class GameWindow(QWidget):
                             reason = data.get("end_reason", "")
                             self.wsChat.emit(f"[GAME OVER] {result} - {reason}")
                             self.wsMove.emit()  # Refresh UI
+                            self.gameEnded.emit()
 
                         elif data.get("type") == "draw_offer":
                             from_player = data.get("from_player")
