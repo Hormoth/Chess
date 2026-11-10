@@ -176,5 +176,13 @@ class StartMenu(QWidget):
     
     def open_game(self, game_id: int):
         self.game = GameWindow(self.api, game_id, None)
+        self.game.gameEnded.connect(self._on_game_ended)
         self.game.resize(1200, 850)
         self.game.show()
+
+    def _on_game_ended(self):
+        """Close game window and return to lobby when game ends."""
+        if self.game:
+            self.game.close()
+            self.game = None
+        self.show_lobby()  # Refresh lobby

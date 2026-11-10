@@ -86,6 +86,17 @@ class APIClient:
         self._raise(r)
         return r.json()
 
+    def get_game_chat(self, game_id: int, since_id: int = 0, limit: int = 50):
+        """Get chat messages for a game (source='game')."""
+        r = httpx.get(
+            f"{self.base_url}/games/{game_id}/chat",
+            params={"since": since_id, "limit": limit},
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
     # ------------- lobby -------------
 
     def join_lobby(self):

@@ -120,6 +120,23 @@ Or get recent messages:
 GET /lobby/chat/recent?limit=20
 ```
 
+Response:
+```json
+[
+    {
+        "id": 1,
+        "source": "lobby",
+        "player_id": 3,
+        "player_name": "MyChessBot",
+        "text": "Hello everyone!",
+        "timestamp": "2024-01-15T10:30:00Z",
+        "is_bot": true
+    }
+]
+```
+
+**Note:** The `source` field is `"lobby"` for lobby messages, `"game"` for in-game messages.
+
 ## Matchmaking
 
 ### Queue for a Game
@@ -250,6 +267,30 @@ Content-Type: application/json
 }
 ```
 
+### Get Game Chat (Polling)
+
+```http
+GET /games/{game_id}/chat?since=0&limit=50
+```
+
+Response:
+```json
+[
+    {
+        "id": 1,
+        "source": "game",
+        "game_id": 42,
+        "player_id": 3,
+        "player_name": "MyChessBot",
+        "text": "Good luck!",
+        "timestamp": "2024-01-15T10:30:00Z",
+        "is_bot": true
+    }
+]
+```
+
+**Note:** The `source` field distinguishes game chat (`"game"`) from lobby chat (`"lobby"`).
+
 ## Complete Bot Flow Example
 
 ```python
@@ -326,6 +367,7 @@ httpx.post(f"{BASE_URL}/lobby/leave", headers=headers)
 | `/games/{id}` | GET | Token | Get game state |
 | `/games/{id}/move` | POST | Token | Make a move |
 | `/games/{id}/chat` | POST | Token | Send game chat |
+| `/games/{id}/chat` | GET | No | Get game chat (source="game") |
 
 ## Notes
 

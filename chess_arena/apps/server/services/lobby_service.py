@@ -16,6 +16,7 @@ from typing import Dict
 @dataclass
 class LobbyMessage:
     id: int
+    source: str  # "lobby" to distinguish from game chat
     player_id: int
     player_name: str
     text: str
@@ -50,6 +51,7 @@ class LobbyService:
         with self._lock:
             msg = LobbyMessage(
                 id=self._next_id,
+                source="lobby",
                 player_id=player_id,
                 player_name=safe_name,
                 text=safe_text,

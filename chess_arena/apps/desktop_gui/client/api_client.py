@@ -147,3 +147,43 @@ class APIClient:
         )
         self._raise(r)
         return r.json()
+
+    def resign(self, game_id: int):
+        """Resign from a game."""
+        r = httpx.post(
+            f"{self.base_url}/games/{game_id}/resign",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def offer_draw(self, game_id: int):
+        """Offer a draw in a game."""
+        r = httpx.post(
+            f"{self.base_url}/games/{game_id}/draw/offer",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def accept_draw(self, game_id: int):
+        """Accept a draw offer."""
+        r = httpx.post(
+            f"{self.base_url}/games/{game_id}/draw/accept",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()
+
+    def decline_draw(self, game_id: int):
+        """Decline a draw offer."""
+        r = httpx.post(
+            f"{self.base_url}/games/{game_id}/draw/decline",
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        self._raise(r)
+        return r.json()

@@ -23,19 +23,19 @@ class MoveHistoryWidget(QWidget):
         layout.addWidget(header)
         
         # Scroll area for moves
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
         self.moves_container = QWidget()
         self.moves_layout = QVBoxLayout(self.moves_container)
         self.moves_layout.setContentsMargins(0, 0, 0, 0)
         self.moves_layout.setSpacing(4)
         self.moves_layout.addStretch()
-        
-        scroll.setWidget(self.moves_container)
-        layout.addWidget(scroll, stretch=1)
+
+        self.scroll.setWidget(self.moves_container)
+        layout.addWidget(self.scroll, stretch=1)
     
     def set_pgn(self, pgn: str):
         """Parse and display moves from PGN move text."""
@@ -78,8 +78,8 @@ class MoveHistoryWidget(QWidget):
             self._add_move_row(current_move_num, white_move, "")
         
         # Scroll to bottom
-        self.moves_layout.parentWidget().parentWidget().verticalScrollBar().setValue(
-            self.moves_layout.parentWidget().parentWidget().verticalScrollBar().maximum()
+        self.scroll.verticalScrollBar().setValue(
+            self.scroll.verticalScrollBar().maximum()
         )
     
     def _add_move_row(self, move_num: int, white_move: str, black_move: str):
